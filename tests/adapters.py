@@ -589,4 +589,8 @@ def run_train_bpe(
                 representing that <token1> was merged with <token2>.
                 Merges are ordered by order of creation.
     """
-    raise NotImplementedError
+    # Initialize vocabulary
+
+    # Parallelized pre-tokenization
+
+    # Keep merging till vocab_size number of tokens is reached
