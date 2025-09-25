@@ -40,6 +40,17 @@ def pretokenize(input_path, desired_num_chunks, split_special_token, special_tok
         final_counter.update(counter)
     
     return final_counter
+
+def get_all_max_keys(counter: Counter):
+    """
+    Returns a list of all keys in the Counter that have the maximum value.
+    """
+    if not counter:
+        return []
+
+    max_value = counter.most_common(1)[0][1]  # Get the maximum value
+    max_keys = [key for key, value in counter.items() if value == max_value]
+    return max_keys
        
 def train_bpe(input_path, special_tokens, vocab_size, desired_num_chunks):
     # Initialize vocabulary
@@ -72,12 +83,10 @@ def train_bpe(input_path, special_tokens, vocab_size, desired_num_chunks):
     # Loop while size of vocab is < vocab size
     while len(vocab) < vocab_size:
         # Get max pair
-        max_pair = pairs_counter.most_common()[0][0]
-
-        print (max_pair)
+        max_pair = max(get_all_max_keys(pairs_counter))
 
         # Add to vocab + merges
-        vocab[max_pair[0] + max_pair[1]] = max_token_idx
+        vocab[max_token_idx] = max_pair[0] + max_pair[1]
         max_token_idx += 1
         merges.append(max_pair)
 
@@ -100,11 +109,12 @@ def train_bpe(input_path, special_tokens, vocab_size, desired_num_chunks):
 
             if idx == len(pretoken) - 1:
                 merged_pretoken.append(pretoken[idx])
+
             merged_pretoken = tuple(merged_pretoken)
             new_pretoken_counter[merged_pretoken] = count
 
             for idx in range(len(merged_pretoken) - 1):
-                pairs_counter[(pretoken[idx], pretoken[idx+1])] += count
+                pairs_counter[(merged_pretoken[idx], merged_pretoken[idx+1])] += count
         pretoken_counter = new_pretoken_counter
 
     return vocab, merges
