@@ -590,4 +590,4 @@ def run_train_bpe(
                 representing that <token1> was merged with <token2>.
                 Merges are ordered by order of creation.
     """
-    return train_bpe(input_path, special_tokens, vocab_size, 100)
+    return train_bpe(input_path, special_tokens, vocab_size, 100, special_tokens[0].encode('utf-8'))

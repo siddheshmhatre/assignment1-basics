@@ -1,18 +1,29 @@
 import regex as re
+import heapq 
 import multiprocessing as mp
-from collections import Counter
+from collections import Counter, defaultdict
 from cs336_basics.pretokenization_example import find_chunk_boundaries
 
-def process_each_chunk(chunk: bytes, special_tokens: list[bytes])-> Counter:
+def process_each_chunk(chunk_boundary : tuple[int], input_path: str, special_tokens: list[bytes])-> Counter:
     # Remove special tokens
     pattern = b'|'.join(re.escape(tok) for tok in special_tokens)
-    chunk_no_special_tokens = b" ".join(re.split(pattern, chunk))
+
+    # Open file handle and only read in required bytes
+    file = open(input_path, 'rb')
+    file.seek(chunk_boundary[0])
+    chunk = file.read(chunk_boundary[1] - chunk_boundary[0])
+
+    # Remove special tokens from chunk
+    chunk_no_special_tokens = b"".join(re.split(pattern, chunk))
     counter = Counter()
 
     PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
 
     for pretoken in re.finditer(PAT, chunk_no_special_tokens.decode("utf-8")):
         pretoken = pretoken.group()
+
+        if re.fullmatch(r"\n+", pretoken):
+            continue
         pretoken = tuple(bytes([b]) for b in pretoken.encode("utf-8"))
         counter[tuple(pretoken)] += 1
 
@@ -21,17 +32,13 @@ def process_each_chunk(chunk: bytes, special_tokens: list[bytes])-> Counter:
 def pretokenize(input_path, desired_num_chunks, split_special_token, special_tokens):
     file = open(input_path, 'rb')
     chunk_boundaries = find_chunk_boundaries(file, desired_num_chunks, split_special_token)
-    chunks = []
-
-    for idx in range(len(chunk_boundaries) - 1):
-        file.seek(chunk_boundaries[idx])
-        chunks.append(file.read(chunk_boundaries[idx + 1] - chunk_boundaries[idx]))
 
     # Run above function on each chunk
     with mp.Pool() as pool:
         local_counters = pool.starmap(
             process_each_chunk,
-            [(chunk, special_tokens) for chunk in chunks]
+            [((chunk_boundaries[idx], chunk_boundaries[idx + 1]), input_path, special_tokens) 
+             for idx in range(len(chunk_boundaries) - 1)]
         )
 
     # Merge all local counters
@@ -41,7 +48,7 @@ def pretokenize(input_path, desired_num_chunks, split_special_token, special_tok
     
     return final_counter
 
-def get_all_max_keys(counter: Counter):
+def get_merge_pair(counter: Counter):
     """
     Returns a list of all keys in the Counter that have the maximum value.
     """
@@ -49,10 +56,12 @@ def get_all_max_keys(counter: Counter):
         return []
 
     max_value = counter.most_common(1)[0][1]  # Get the maximum value
-    max_keys = [key for key, value in counter.items() if value == max_value]
-    return max_keys
+    merge_pairs = [key for key, value in counter.items() if value == max_value]
+    # print (counter.most_common()[:15])
+    # import pdb; pdb.set_trace()
+    return max(merge_pairs)
        
-def train_bpe(input_path, special_tokens, vocab_size, desired_num_chunks):
+def train_bpe(input_path, special_tokens, vocab_size, desired_num_chunks, split_special_token):
     # Initialize vocabulary
     max_token_idx = 0
     vocab = dict()
@@ -67,41 +76,57 @@ def train_bpe(input_path, special_tokens, vocab_size, desired_num_chunks):
         vocab[max_token_idx] = bytes([i])
         max_token_idx += 1
 
-    split_special_token = b'<|endoftext|>'
     special_tokens = [token.encode('utf-8') for token in special_tokens]
 
+    print("Pretokenizing...")
     pretoken_counter = pretokenize(input_path, desired_num_chunks, split_special_token, special_tokens)
 
     # Count all the pairs of bytes
     pairs_counter = Counter()
+    pairs_to_pretoken = defaultdict(set)
     for pretoken, count in pretoken_counter.items():
         for idx in range(len(pretoken) - 1):
-            pairs_counter[(pretoken[idx], pretoken[idx+1])] += count
+            pair = (pretoken[idx], pretoken[idx+1])
+            pairs_counter[pair] += count
+            pairs_to_pretoken[pair].add(pretoken)
 
     merges = []
 
+    print("Tokenizing...")
     # Loop while size of vocab is < vocab size
     while len(vocab) < vocab_size:
         # Get max pair
-        max_pair = max(get_all_max_keys(pairs_counter))
+        max_pair = get_merge_pair(pairs_counter)
+        #if max_pair == (b'o', b'w'):
+        #    import pdb; pdb.set_trace()
 
         # Add to vocab + merges
         vocab[max_token_idx] = max_pair[0] + max_pair[1]
         max_token_idx += 1
         merges.append(max_pair)
 
-        # Create new counter and repeat
-        pairs_counter = Counter()
-        new_pretoken_counter = Counter()
-        for pretoken, count in pretoken_counter.items():
+        # Set max pair count to -1 so that it doesn't get picked again
+        pairs_counter[max_pair] = -1
+
+        for pretoken in pairs_to_pretoken[max_pair]:
             idx = 0
             merged_pretoken = []
+            pretoken_count = pretoken_counter[pretoken]
             while idx < len(pretoken) - 1:
                 char_1 = pretoken[idx]
                 char_2 = pretoken[idx + 1]
 
                 if char_1 == max_pair[0] and char_2 == max_pair[1]:
-                    merged_pretoken.append(char_1 + char_2)
+                    new_token = char_1 + char_2
+                    merged_pretoken.append(new_token)
+                    # Adjust counts for tokens involving merge pair
+                    # Can do with xor too but keeping it verbose for clarity
+                    if idx - 1 >= 0:
+                        pairs_counter[(pretoken[idx - 1], char_1)] -= pretoken_count
+                        pairs_counter[(pretoken[idx - 1], new_token)] += pretoken_count
+                    if idx + 2 < len(pretoken):
+                        pairs_counter[(char_2, pretoken[idx + 2])] -= pretoken_count
+                        pairs_counter[(new_token, pretoken[idx + 2])] += pretoken_count
                     idx += 2
                 else:
                     merged_pretoken.append(char_1)
@@ -111,10 +136,15 @@ def train_bpe(input_path, special_tokens, vocab_size, desired_num_chunks):
                 merged_pretoken.append(pretoken[idx])
 
             merged_pretoken = tuple(merged_pretoken)
-            new_pretoken_counter[merged_pretoken] = count
+            pretoken_counter[merged_pretoken] = pretoken_counter[pretoken]
 
-            for idx in range(len(merged_pretoken) - 1):
-                pairs_counter[(merged_pretoken[idx], merged_pretoken[idx+1])] += count
-        pretoken_counter = new_pretoken_counter
+            for idx in range(len(pretoken) - 1):
+                pair = (pretoken[idx], pretoken[idx+1])
+
+                if pretoken in pairs_to_pretoken[pair]:
+                    pairs_to_pretoken[pair].remove(pretoken)
+
+                pairs_to_pretoken[pair].add(merged_pretoken)
+
 
     return vocab, merges
