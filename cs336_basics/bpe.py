@@ -93,58 +93,57 @@ def train_bpe(input_path, special_tokens, vocab_size, desired_num_chunks, split_
     merges = []
 
     print("Tokenizing...")
+    
     # Loop while size of vocab is < vocab size
     while len(vocab) < vocab_size:
+
+        # Log step number
+        if len(vocab) % 100 == 0:
+            print (f"Vocab size {len(vocab)} / {vocab_size}")
+
         # Get max pair
         max_pair = get_merge_pair(pairs_counter)
-        #if max_pair == (b'o', b'w'):
-        #    import pdb; pdb.set_trace()
 
         # Add to vocab + merges
-        vocab[max_token_idx] = max_pair[0] + max_pair[1]
+        new_token = max_pair[0] + max_pair[1]
+        vocab[max_token_idx] = new_token
         max_token_idx += 1
         merges.append(max_pair)
 
         # Set max pair count to -1 so that it doesn't get picked again
-        pairs_counter[max_pair] = -1
+        pretokens_to_update = list(pairs_to_pretoken[max_pair])
 
-        for pretoken in pairs_to_pretoken[max_pair]:
+        for pretoken in pretokens_to_update:
             idx = 0
             merged_pretoken = []
-            pretoken_count = pretoken_counter[pretoken]
-            while idx < len(pretoken) - 1:
-                char_1 = pretoken[idx]
-                char_2 = pretoken[idx + 1]
 
-                if char_1 == max_pair[0] and char_2 == max_pair[1]:
-                    new_token = char_1 + char_2
+            while idx < len(pretoken):
+                # Check for merge at the current position
+                if idx < len(pretoken) - 1 and (pretoken[idx], pretoken[idx + 1]) == max_pair:
                     merged_pretoken.append(new_token)
-                    # Adjust counts for tokens involving merge pair
-                    # Can do with xor too but keeping it verbose for clarity
-                    if idx - 1 >= 0:
-                        pairs_counter[(pretoken[idx - 1], char_1)] -= pretoken_count
-                        pairs_counter[(pretoken[idx - 1], new_token)] += pretoken_count
-                    if idx + 2 < len(pretoken):
-                        pairs_counter[(char_2, pretoken[idx + 2])] -= pretoken_count
-                        pairs_counter[(new_token, pretoken[idx + 2])] += pretoken_count
                     idx += 2
                 else:
-                    merged_pretoken.append(char_1)
+                    merged_pretoken.append(pretoken[idx])
                     idx += 1
-
-            if idx == len(pretoken) - 1:
-                merged_pretoken.append(pretoken[idx])
-
             merged_pretoken = tuple(merged_pretoken)
-            pretoken_counter[merged_pretoken] = pretoken_counter[pretoken]
 
-            for idx in range(len(pretoken) - 1):
-                pair = (pretoken[idx], pretoken[idx+1])
+            pretoken_count = pretoken_counter[pretoken]
+            del pretoken_counter[pretoken]
+            pretoken_counter[merged_pretoken] += pretoken_count
 
-                if pretoken in pairs_to_pretoken[pair]:
+            for i in range(len(pretoken) - 1):
+                pair = (pretoken[i], pretoken[i+1])
+                pairs_counter[pair] -= pretoken_count
+                # Clean up the reverse map
+                if pair in pairs_to_pretoken and pretoken in pairs_to_pretoken[pair]:
                     pairs_to_pretoken[pair].remove(pretoken)
 
+            for i in range(len(merged_pretoken) - 1):
+                pair = (merged_pretoken[i], merged_pretoken[i+1])
+                pairs_counter[pair] += pretoken_count
+                # Add the new pretoken to the reverse map for its pairs
                 pairs_to_pretoken[pair].add(merged_pretoken)
 
+            del pairs_counter[max_pair]
 
     return vocab, merges
