@@ -1,3 +1,4 @@
+import json
 import regex as re
 import pickle
 from typing import Dict, List, Tuple, Optional, Iterable, Iterator
@@ -36,13 +37,16 @@ class Tokenizer:
         Class method that constructs and return a Tokenizer from a serialized 
         vocabulary and list of merges.
         """
-        with open(vocab_filepath, 'rb') as f:
-             loaded_vocab = pickle.load(f)
+        with open(vocab_filepath, 'r') as f:
+            loaded_vocab = json.load(f)
 
-        #with open(merges_filepath, 'rb') as f:
-        #     loaded_merges = f.readlines()
-
-        return cls(loaded_vocab['vocab'], loaded_vocab['merges'], special_tokens)
+        loaded_merges = []
+        with open(merges_filepath) as f:
+            for line in f:
+                cleaned_line = line.rstrip()
+                if cleaned_line and len(cleaned_line.split(" ")) == 2:
+                    loaded_merges.append(tuple(cleaned_line.split(" ")))
+        return cls(loaded_vocab, loaded_vocab, special_tokens)
 
     def _encode_no_special_tokens_text(self, tokenized_text: List[int], text:str):
         # For every pretoken -> apply merges in order
