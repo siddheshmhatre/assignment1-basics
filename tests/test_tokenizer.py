@@ -43,7 +43,6 @@ def get_tokenizer_from_vocab_merges_path(
 ):
     gpt2_byte_decoder = {v: k for k, v in gpt2_bytes_to_unicode().items()}
     with open(vocab_path) as vocab_f:
-        import pdb; pdb.set_trace()
         gpt2_vocab = json.load(vocab_f)
     gpt2_bpe_merges = []
     with open(merges_path) as f:
@@ -80,7 +79,6 @@ def test_roundtrip_empty():
         vocab_path=VOCAB_PATH,
         merges_path=MERGES_PATH,
     )
-    import pdb; pdb.set_trace()
     test_string = ""
     encoded_ids = tokenizer.encode(test_string)
     decoded_string = tokenizer.decode(encoded_ids)

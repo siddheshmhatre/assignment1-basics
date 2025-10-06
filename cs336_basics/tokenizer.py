@@ -85,7 +85,6 @@ class Tokenizer:
         Encode an input text into a sequence of token IDs.
         """
         # Create mapping start position of special token 
-        special_token_mapping = dict()
         matches = []
         for token in self.special_tokens:
             matches += list(re.finditer(re.escape(token), text))
@@ -94,20 +93,42 @@ class Tokenizer:
         matches = sorted(matches, key=lambda x: x.span()[0])
 
         tokenized_text = []
-        start_pos = 0
 
-        for match in matches:
-            end_pos = match.span()[0]
+        if len(matches) > 0:
+            start_pos = 0
 
-            self._encode_no_special_tokens_text(tokenized_text, text[start_pos:end_pos])
+            processed_matches = [matches[0]]
 
-            special_token = match.group()
-            tokenized_text.append(self.vocab_rev[special_token.encode('utf-8')])
+            if len(matches) > 1:
+                # Remove overlaps
+                # TODO - express this more elegantly
+                for match in matches[1:]:
+                    last_match = processed_matches[-1]
 
-            start_pos = match.span()[1]
+                    if last_match.span()[1] < match.span()[0]:
+                        processed_matches.append(match)
+                    else:
+                        cond1 = match.span()[0] <= last_match.span()[0]
+                        cond2 = match.span()[1] >= last_match.span()[1]
 
-        if matches[-1].span()[1] < len(text) - 1:
-            self._encode_no_special_tokens_text(tokenized_text, text[start_pos:])
+                        if cond1 and cond2:
+                            processed_matches.pop(-1)
+                            processed_matches.append(match)
+
+            for match in processed_matches:
+                end_pos = match.span()[0]
+
+                self._encode_no_special_tokens_text(tokenized_text, text[start_pos:end_pos])
+
+                special_token = match.group()
+                tokenized_text.append(self.vocab_rev[special_token.encode('utf-8')])
+
+                start_pos = match.span()[1]
+
+            if matches[-1].span()[1] < len(text) - 1:
+                self._encode_no_special_tokens_text(tokenized_text, text[start_pos:])
+        else:
+            self._encode_no_special_tokens_text(tokenized_text, text)
 
         return tokenized_text
 
