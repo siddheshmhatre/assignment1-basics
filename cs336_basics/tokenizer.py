@@ -37,16 +37,18 @@ class Tokenizer:
         Class method that constructs and return a Tokenizer from a serialized 
         vocabulary and list of merges.
         """
-        with open(vocab_filepath, 'r') as f:
-            loaded_vocab = json.load(f)
+        import pickle
+        with open(vocab_filepath, 'rb') as f:
+            # loaded_vocab = json.load(f)
+            loaded_vocab = pickle.load(f)
 
-        loaded_merges = []
-        with open(merges_filepath) as f:
-            for line in f:
-                cleaned_line = line.rstrip()
-                if cleaned_line and len(cleaned_line.split(" ")) == 2:
-                    loaded_merges.append(tuple(cleaned_line.split(" ")))
-        return cls(loaded_vocab, loaded_vocab, special_tokens)
+        #loaded_merges = []
+        #with open(merges_filepath) as f:
+        #    for line in f:
+        #        cleaned_line = line.rstrip()
+        #        if cleaned_line and len(cleaned_line.split(" ")) == 2:
+        #            loaded_merges.append(tuple(cleaned_line.split(" ")))
+        return cls(loaded_vocab['vocab'], loaded_vocab['merges'], special_tokens)
 
     def _encode_no_special_tokens_text(self, tokenized_text: List[int], text:str):
         # For every pretoken -> apply merges in order
@@ -101,11 +103,10 @@ class Tokenizer:
 
             if len(matches) > 1:
                 # Remove overlaps
-                # TODO - express this more elegantly
                 for match in matches[1:]:
                     last_match = processed_matches[-1]
 
-                    if last_match.span()[1] < match.span()[0]:
+                    if last_match.span()[1] <= match.span()[0]:
                         processed_matches.append(match)
                     else:
                         cond1 = match.span()[0] <= last_match.span()[0]
@@ -125,7 +126,7 @@ class Tokenizer:
 
                 start_pos = match.span()[1]
 
-            if matches[-1].span()[1] < len(text) - 1:
+            if len(text[start_pos:]) > 0:
                 self._encode_no_special_tokens_text(tokenized_text, text[start_pos:])
         else:
             self._encode_no_special_tokens_text(tokenized_text, text)
