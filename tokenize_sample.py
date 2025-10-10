@@ -1,3 +1,4 @@
+import time
 import os
 import argparse
 from cs336_basics.tokenizer import Tokenizer
@@ -73,12 +74,17 @@ if __name__ == '__main__':
 
     print ("Tokenizing...")
     all_ids = []
+    start_time = time.time()
     with open(sample_filename) as f:
         for _id in tokenizer.encode_iterable(f):
             all_ids.append(_id)
+
+    end_time = time.time()
+    total_time_in_seconds = end_time - start_time
 
     file_size_in_bytes = os.path.getsize(sample_filename)
     bytes_per_token =  file_size_in_bytes / len(all_ids)
     print (f"Number of bytes: {file_size_in_bytes}")
     print (f"Number of tokens: {len(all_ids)}")
     print(f"Bytes / token ratio: {bytes_per_token}")
+    print(f"Throughput in bytes / sec: {file_size_in_bytes / total_time_in_seconds}")
