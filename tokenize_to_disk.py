@@ -29,12 +29,12 @@ if __name__ == '__main__':
     all_ids = []
     start_time = time.time()
     
-    # Use 'with' for both the progress bar and the file to ensure they are closed
     with tqdm(total=file_size_in_bytes, unit='B', unit_scale=True, desc=f"Processing {args.input_path}") as pbar:
-        # It's good practice to specify encoding
-        with open(args.input_path, 'r', encoding='utf-8') as f:
-            for _id in tokenizer.encode_iterable(f, pbar=pbar):
-                all_ids.append(_id)
+        for _id in tokenizer.encode_parallel(args.input_path, 
+                                            desired_num_chunks = 10000, 
+                                            split_special_token=special_tokens[0],
+                                            pbar=pbar):
+            all_ids.append(_id)
 
     all_ids = np.uint16(all_ids)
     np.save(args.input_path.replace("txt", "npy"), all_ids)

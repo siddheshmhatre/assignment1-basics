@@ -2,12 +2,15 @@ import json
 import regex as re
 import pickle
 from typing import Dict, List, Tuple, Optional, Iterable, Iterator
+from functools import partial
+import multiprocessing as mp
 
 import json
 import regex as re
 import pickle
 from typing import Dict, List, Tuple, Optional, Iterable, Iterator
 from tqdm.auto import tqdm # Import tqdm
+from cs336_basics.pretokenization_example import find_chunk_boundaries
 
 class Tokenizer:
     """
@@ -118,6 +121,33 @@ class Tokenizer:
                 # Update progress bar by the number of bytes in the current line
                 pbar.update(len(line.encode('utf-8')))
             yield from self.encode(line)
+
+    def _encode_chunk(self, chunk_boundary: tuple[int], input_path: str) -> list[int]:
+        # Read in text and return self.encode
+        # Open file handle and only read in required bytes
+        with open(input_path, 'rb') as file:
+            file.seek(chunk_boundary[0])
+            chunk = file.read(chunk_boundary[1] - chunk_boundary[0])
+
+        return (self.encode(chunk.decode('utf-8')), len(chunk))
+
+    def encode_parallel(self, input_path, desired_num_chunks, split_special_token, pbar: Optional[tqdm] = None) -> Iterator[int]:
+        file = open(input_path, 'rb')
+
+        chunk_boundaries = find_chunk_boundaries(file, desired_num_chunks, split_special_token.encode('utf-8'))
+
+        encode_chunk = partial(self._encode_chunk, input_path=input_path)
+
+        with mp.Pool() as pool:
+            tokenized_chunks = pool.imap(
+                encode_chunk,
+                [(chunk_boundaries[idx], chunk_boundaries[idx + 1]) for idx in range(len(chunk_boundaries) - 1)]
+                )
+
+            for chunk, chunk_size in tokenized_chunks:
+                if pbar:
+                    pbar.update(chunk_size)
+                yield from chunk
 
     def decode(self, ids: List[int]) -> str:
         decoded_text = b""
