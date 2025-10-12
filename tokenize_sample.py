@@ -73,28 +73,18 @@ if __name__ == '__main__':
     )
 
     print ("Tokenizing...")
-    i_ids = []
+    all_ids = []
     start_time = time.time()
     with open(sample_filename) as f:
         for _id in tokenizer.encode_iterable(f):
-            i_ids.append(_id)
+            all_ids.append(_id)
 
-    p_ids = []
-    for _id in tokenizer.encode_parallel(args.input_path, 
-                                         desired_num_chunks = 100, 
-                                         split_special_token=special_tokens[0]):
-        p_ids.append(_id)
+    end_time = time.time()
+    total_time_in_seconds = end_time - start_time
 
-    import pdb; pdb.set_trace()
-
-    assert(i_ids == p_ids)
-
-    #end_time = time.time()
-    #total_time_in_seconds = end_time - start_time
-
-    #file_size_in_bytes = os.path.getsize(sample_filename)
-    #bytes_per_token =  file_size_in_bytes / len(all_ids)
-    #print (f"Number of bytes: {file_size_in_bytes}")
-    #print (f"Number of tokens: {len(all_ids)}")
-    #print(f"Bytes / token ratio: {bytes_per_token}")
-    #print(f"Throughput in bytes / sec: {file_size_in_bytes / total_time_in_seconds}")
+    file_size_in_bytes = os.path.getsize(sample_filename)
+    bytes_per_token =  file_size_in_bytes / len(all_ids)
+    print (f"Number of bytes: {file_size_in_bytes}")
+    print (f"Number of tokens: {len(all_ids)}")
+    print(f"Bytes / token ratio: {bytes_per_token}")
+    print(f"Throughput in bytes / sec: {file_size_in_bytes / total_time_in_seconds}")
