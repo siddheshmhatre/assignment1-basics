@@ -11,7 +11,7 @@ from torch import Tensor
 from cs336_basics.bpe import train_bpe
 from cs336_basics.tokenizer import Tokenizer
 
-from cs336_basics.transformers_arch import Linear, Embedding, RMSNorm, SwiGLU, RoPE, SoftMax, ScaledDotProductAttention, MultiHeadSelfAttention
+from cs336_basics.transformers_arch import Linear, Embedding, RMSNorm, SwiGLU, RoPE, SoftMax, ScaledDotProductAttention, MultiHeadSelfAttention, TransformerBlock, TransformerLM
 
 def run_linear(
     d_in: int,
@@ -186,7 +186,7 @@ def run_multihead_self_attention_with_rope(
         Float[Tensor, " ... sequence_length d_out"]: Tensor with the output of running your optimized, batched multi-headed attention
         implementation with the given QKV projection weights and input features.
     """
-    multi_head_spda = MultiHeadSelfAttention(d_model, num_heads, q_proj_weight, k_proj_weight, v_proj_weight, o_proj_weight, theta, max_seq_len)
+    multi_head_spda = MultiHeadSelfAttention(d_model, num_heads, q_proj_weight, k_proj_weight, v_proj_weight, o_proj_weight, theta, max_seq_le)
     return multi_head_spda(in_features, token_positions)
 
 def run_rope(
@@ -282,7 +282,9 @@ def run_transformer_block(
         Float[Tensor, "batch sequence_length d_model"] Tensor with the output of
         running the Transformer block on the input features while using RoPE.
     """
-    raise NotImplementedError
+    transformer_block = TransformerBlock(d_model, num_heads, d_ff, max_seq_len, theta)
+    transformer_block.initialize_weights(weights)
+    return transformer_block(in_features)
 
 
 def run_transformer_lm(
@@ -364,7 +366,9 @@ def run_transformer_lm(
         Float[Tensor, "batch_size sequence_length vocab_size"]: Tensor with the predicted unnormalized
         next-word distribution for each token.
     """
-    raise NotImplementedError
+    transformer_lm = TransformerLM(vocab_size, context_length, d_model, num_layers, num_heads, d_ff, rope_theta)
+    transformer_lm.initialize_weights(weights)
+    return transformer_lm(in_indices)
 
 
 def run_rmsnorm(

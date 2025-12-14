@@ -183,3 +183,59 @@ class MultiHeadSelfAttention(nn.Module):
         x = self.o_proj(x)
 
         return x
+
+class TransformerBlock(nn.Module):
+    def __init__(self, d_model: int, num_heads: int, d_ff: int, max_seq_len: int, theta: float):
+        super().__init__()
+
+        self.ln1 = RMSNorm(d_model)        
+        self.ln2 = RMSNorm(d_model)        
+        self.attn = MultiHeadSelfAttention(d_model, num_heads, theta=theta, max_seq_len=max_seq_len)
+        self.ffn = SwiGLU(d_model, d_ff)
+
+    def initialize_weights(self, weights: dict[str, torch.Tensor]):
+        weights = {k: nn.Parameter(v) for k,v in weights.items()}
+
+        self.ln1.gain = weights['ln1.weight']
+        self.ln2.gain = weights['ln2.weight']
+        self.attn.QKV.W = nn.Parameter(torch.cat([weights['attn.q_proj.weight'], 
+                                weights['attn.k_proj.weight'], 
+                                weights['attn.v_proj.weight']], dim=0))
+        self.attn.o_proj.W = weights['attn.output_proj.weight']
+        self.ffn.W1.W = weights['ffn.w1.weight']
+        self.ffn.W2.W = weights['ffn.w2.weight']
+        self.ffn.W3.W = weights['ffn.w3.weight']
+
+    def forward(self, x):
+        token_positions = torch.arange(x.shape[1])
+        x = x + self.attn(self.ln1(x), token_positions=token_positions)
+        x = x + self.ffn(self.ln2(x))
+        return x
+
+class TransformerLM(nn.Module):
+    def __init__(self, vocab_size: int, context_length: int, d_model: int, num_layers: int, num_heads: int, d_ff: int, rope_theta: float):
+        super().__init__()
+        self.embed = Embedding(vocab_size, d_model)
+
+        self.transformer_lm = nn.ModuleList([TransformerBlock(d_model, num_heads, d_ff, context_length, rope_theta) for _ in range(num_layers)])
+        self.ln_final = RMSNorm(d_model)
+        self.lm_head = Linear(vocab_size, d_model)
+
+    def initialize_weights(self, weights: dict[str, torch.Tensor]):
+        weights = {k: nn.Parameter(v) for k, v in weights.items()}
+        self.embed.embeddings = weights['token_embeddings.weight']
+        
+        for idx, transformer_block in enumerate(self.transformer_lm):
+            block_weights = {'.'.join(k.split('.')[2:]): v for k,v in weights.items() if k.split('.')[1] == str(idx)}
+            transformer_block.initialize_weights(block_weights)
+
+        self.ln_final.gain = weights['ln_final.weight']
+        self.lm_head.W = weights['lm_head.weight']
+
+    def forward(self, x):
+        x = self.embed(x)
+
+        for layer in self.transformer_lm:
+            x = layer(x)
+
+        return self.lm_head(self.ln_final(x))
