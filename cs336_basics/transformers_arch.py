@@ -95,9 +95,6 @@ class RoPE(nn.Module):
         self.register_buffer("cosines_cached", cosines)
 
     def forward(self, x: torch.Tensor, token_positions: torch.Tensor) -> torch.Tensor:
-        # for each position in each batch -> multiply by required rotation matrix for that position
-        # Input sequence will be -> #batch_size x seq_len x d_model
-        # Output sequence will be -> #batch_size x seq_len x d_model
         sine = self.sines_cached[token_positions]
         cosine = self.cosines_cached[token_positions]
 
