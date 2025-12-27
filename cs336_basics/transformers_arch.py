@@ -11,8 +11,8 @@ class Linear(nn.Module):
 
         if weights is None:
             weights = torch.empty(out_features, in_features, dtype=dtype, device=device)
-            stddev = 2 / (in_features + out_features)
-            nn.init.trunc_normal_(weights, std = stddev, a = -3 * stddev, b = -3 * stddev)
+            stddev = (2 / (in_features + out_features)) ** 0.5
+            nn.init.trunc_normal_(weights, std = stddev, a = -3 * stddev, b = 3 * stddev)
 
         self.W = nn.Parameter(weights)
 
@@ -156,7 +156,7 @@ class MultiHeadSelfAttention(nn.Module):
         weights = None
         if q_proj_weight is not None: # Assuming that if q weights are given then so are the rest
             weights = torch.cat([q_proj_weight, k_proj_weight, v_proj_weight], dim=-2)
-        self.QKV = Linear(d_model * 3, d_model, weights=weights)
+        self.QKV = Linear(d_model, d_model * 3, weights=weights)
         self.spda = ScaledDotProductAttention()
         self.o_proj = Linear(d_model, d_model, weights=o_proj_weight)
 
@@ -167,7 +167,7 @@ class MultiHeadSelfAttention(nn.Module):
         seq_len = x.shape[1]
         x = self.QKV(x)
 
-        mask = torch.tril(torch.ones(seq_len, seq_len)).bool()
+        mask = torch.tril(torch.ones(seq_len, seq_len, device=x.device)).bool()
         Q, K, V = rearrange(x, "b s (qkv heads d_head) -> qkv b heads s d_head", qkv=3, heads=self.num_heads, d_head=self.d_head)
 
         if token_positions is not None:
@@ -216,7 +216,7 @@ class TransformerLM(nn.Module):
 
         self.transformer_lm = nn.ModuleList([TransformerBlock(d_model, num_heads, d_ff, context_length, rope_theta) for _ in range(num_layers)])
         self.ln_final = RMSNorm(d_model)
-        self.lm_head = Linear(vocab_size, d_model)
+        self.lm_head = Linear(d_model, vocab_size)
 
     def initialize_weights(self, weights: dict[str, torch.Tensor]):
         weights = {k: nn.Parameter(v) for k, v in weights.items()}
