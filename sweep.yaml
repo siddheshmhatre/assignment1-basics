@@ -1,0 +1,12 @@
+program: ./train_tiny_stores.sh
+method: grid
+metric:
+  name: val_loss
+  goal: minimize
+parameters:
+  batch_size:
+    values: [16, 32, 64, 128]
+command:
+  - ${env}
+  - ${program}
+  - ${args}

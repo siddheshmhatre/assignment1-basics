@@ -28,15 +28,14 @@ def main():
     parser.add_argument("--num_heads", type=int, default=12)
     parser.add_argument("--d_ff", type=int, default=3072)
     parser.add_argument("--rope_theta", type=float, default=10000.0)
-    parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--weight_decay", type=float, default=0.01)
     parser.add_argument("--betas", type=float, nargs=2, default=(0.9, 0.999))
-    parser.add_argument("--eps", type=float, default=1e-8)
+    parser.add_argument("--eps", type=float, default=2e-8)
     parser.add_argument("--max_learning_rate", type=float, default=6e-4)
-    parser.add_argument("--min_learning_rate", type=float, default=6e-5)
+    parser.add_argument("--min_learning_rate", type=float, default=None)
     parser.add_argument("--warmup_iters", type=int, default=100)
-    parser.add_argument("--cosine_cycle_iters", type=int, default=1000)
-    parser.add_argument("--max_l2_norm", type=float, default=1.0)
+    parser.add_argument("--cosine_cycle_iters", type=int, default=None)
+    parser.add_argument("--max_l2_norm", type=float, default=2.0)
     parser.add_argument("--batch_size", type=int, default=32)
     parser.add_argument("--train_path", type=str, required=True)
     parser.add_argument("--val_path", type=str, required=True)
@@ -49,6 +48,15 @@ def main():
 
     set_seed(42)
 
+    if args.min_learning_rate is None:
+        args.min_learning_rate = 0.1 * args.max_learning_rate
+
+    tokens_per_iter = args.batch_size * args.context_length
+    total_iters = args.num_tokens // tokens_per_iter
+
+    if args.cosine_cycle_iters is None:
+        args.cosine_cycle_iters = total_iters
+
     mode = "offline" if args.wandb_offline else "online"
     wandb.init(project="cs336_assignment_1", config=args, mode=mode)
     folder_name = f"{wandb.run.name}_{wandb.run.id}"
@@ -58,13 +66,10 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model = TransformerLM(args.vocab_size, args.context_length, args.d_model, args.num_layers, args.num_heads, args.d_ff, args.rope_theta).to(device)
     loss_fn = CrossEntropyLoss()
-    optimizer = AdamW(model.parameters(), args.lr, args.weight_decay, args.betas, args.eps)
+    optimizer = AdamW(model.parameters(), weight_decay=args.weight_decay, betas=args.betas, eps=args.eps)
     
     train_ds = np.load(args.train_path, mmap_mode="r")
     val_ds = np.load(args.val_path, mmap_mode="r")
-
-    tokens_per_iter = args.batch_size * args.context_length
-    total_iters = args.num_tokens // tokens_per_iter
 
     if args.overfit:
         total_iters = 10_000
@@ -106,9 +111,10 @@ def main():
                 v_loss = loss_fn(v_logits.view(-1, v_logits.size(-1)), y.view(-1))
                 wandb.log({"val_loss": v_loss.item(), "step": step})
             
-            save_checkpoint(model, optimizer, step, os.path.join(checkpoint_dir, f"ckpt_{step}.pt"))
-
         step += 1
+
+	# Only save checkpoint at the end
+    save_checkpoint(model, optimizer, step, os.path.join(checkpoint_dir, f"ckpt_{step}.pt"))
 
     tokenizer = Tokenizer.from_files("data/TinyStoriesV2-GPT4-train.pkl", "", ["<|endoftext|>"])
     sample_tokens = tokenizer.encode("Once upon a time")

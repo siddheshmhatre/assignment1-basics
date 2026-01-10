@@ -25,7 +25,7 @@ class Embedding(nn.Module):
 
         if weights is None:
             weights = torch.empty(num_embeddings, embedding_dim, dtype=dtype, device=device)
-            nn.init.trunc_normal_(weights, std = 1, a = -3, b = -3)
+            nn.init.trunc_normal_(weights, std = 1, a = -3, b = 3)
 
         self.embeddings = nn.Parameter(weights)	
 
