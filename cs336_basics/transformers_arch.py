@@ -2,6 +2,8 @@ import math
 import torch
 import torch.nn as nn
 
+from typing import List, Dict
+from collections import defaultdict
 from jaxtyping import Float
 from einops import einsum, reduce, rearrange
 
@@ -236,3 +238,23 @@ class TransformerLM(nn.Module):
             x = layer(x)
 
         return self.lm_head(self.ln_final(x))
+
+    def get_per_block_gradient_norms(self) -> Dict[str, float]:
+        gradient_norm_mapping = defaultdict(float)
+        for param_name, param in self.named_parameters():
+            if param.grad is not None:
+                norm = torch.linalg.norm(param.grad) ** 2
+
+                param_name = param_name.split('.')
+
+                if param_name[0] == "transformer_lm":
+                    layer_name = ".".join(param_name[:2])
+                else:
+                    layer_name = param_name[0]
+
+                gradient_norm_mapping[f"grad_norm/{layer_name}"] += norm
+
+        for layer, norm in gradient_norm_mapping.items():
+            gradient_norm_mapping[layer] = torch.sqrt(norm).item()
+
+        return gradient_norm_mapping

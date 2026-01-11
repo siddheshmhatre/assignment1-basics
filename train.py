@@ -95,6 +95,8 @@ def main():
         
         optimizer.zero_grad()
         loss.backward()
+        wandb.log({**model.get_per_block_gradient_norms(), "step" : step})
+
         gradient_clipping(model.parameters(), args.max_l2_norm)
         optimizer.step()
 

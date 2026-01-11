@@ -3,8 +3,8 @@ import random
 import numpy as np
 import torch.nn as nn
 
-from typing import List
-
+from typing import List, Dict
+from collections import defaultdict
 from cs336_basics.transformers_arch import SoftMax
 
 def decode(model: nn.Module, prompt_token_ids: torch.Tensor, eos_token_id: int, max_num_tokens: int, temperature: float, top_p: float = None) -> List[int]:
@@ -48,6 +48,7 @@ def set_seed(seed: int) -> None:
     torch.manual_seed(seed)
     random.seed(seed)
     np.random.seed(seed)
+
 
 if __name__ == "__main__":
     class MockModel(nn.Module):

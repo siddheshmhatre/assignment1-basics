@@ -79,7 +79,7 @@ def gradient_clipping(parameters: Iterable[torch.nn.Parameter], max_l2_norm: flo
         if grad is not None:
             grad_norm += (torch.linalg.norm(grad.data))**2
 
-    grad_norm = math.sqrt(grad_norm)
+    grad_norm = torch.sqrt(grad_norm)
 
     if grad_norm > max_l2_norm:
         scale = max_l2_norm / (grad_norm + 10e-6)
