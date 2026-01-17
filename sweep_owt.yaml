@@ -1,0 +1,20 @@
+program: ./train_owt.sh
+project: cs336_assignment_1
+method: bayes
+metric:
+  name: val_loss
+  goal: minimize
+run_cap: 12
+parameters:
+  batch_size:
+    values: [64, 128]
+  max_learning_rate:
+    min: 0.002
+    max: 0.008
+  weight_decay:
+    min: 0.1
+    max: 0.4
+command:
+  - ${env}
+  - ${program}
+  - ${args}

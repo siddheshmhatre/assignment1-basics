@@ -169,3 +169,6 @@ wandb/*
 
 # Claude Code settings
 .claude/settings.json
+
+# Claude docs
+.claude_docs/
